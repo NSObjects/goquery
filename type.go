@@ -5,10 +5,13 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-
+	"bytes"
 	"github.com/andybalholm/cascadia"
 
 	"golang.org/x/net/html"
+
+	"compress/gzip"
+
 )
 
 // Document represents an HTML document to be manipulated. Unlike jQuery, which
@@ -28,9 +31,9 @@ func NewDocumentFromNode(root *html.Node) *Document {
 	return newDocument(root, nil)
 }
 
-// NewDocument is a Document constructor that takes a string URL as argument.
-// It loads the specified document, parses it, and stores the root Document
-// node, ready to be manipulated.
+//NewDocument is a Document constructor that takes a string URL as argument.
+//It loads the specified document, parses it, and stores the root Document
+//node, ready to be manipulated.
 func NewDocument(url string) (*Document, error) {
 	// Load the URL
 	res, e := http.Get(url)
@@ -38,6 +41,47 @@ func NewDocument(url string) (*Document, error) {
 		return nil, e
 	}
 	return NewDocumentFromResponse(res)
+}
+
+
+//NewDocumentFromUrl is a Document constructor that takes a string URL as argument.
+//It loads the specified document, parses it, and stores the root Document
+//node, ready to be manipulated.
+func NewDocumentFromUrl(url string, header http.Header) (*Document, error) {
+	// Load the URL
+	client := &http.Client{}
+	// Create request
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header = header
+	if err != nil {
+		return nil, err
+	}
+	// Fetch Request
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+	var reader io.ReadCloser
+
+	switch resp.Header.Get("Content-Encoding") {
+	case "gzip":
+		reader, err = gzip.NewReader(resp.Body)
+		if err != nil {
+			return nil,err
+		}
+	default:
+		reader = resp.Body
+	}
+	var b []byte
+	buf := bytes.NewBuffer(b)
+	buf.ReadFrom(reader)
+
+	return NewDocumentFromReader(buf)
 }
 
 // NewDocumentFromReader returns a Document from a generic reader.
